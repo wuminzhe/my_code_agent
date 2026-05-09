@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "yaml"
+require_relative "extension"
 
 module CodeAgent
   # Loads skills from SKILL.md files in standard directories.

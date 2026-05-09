@@ -150,3 +150,30 @@ my_code_agent/
 
 - Ruby >= 3.2
 - API key for your chosen provider (DeepSeek, OpenAI, Anthropic, or Google)
+
+## System prompt features
+
+- 动态上下文注入
+▏ 系统提示词现在自动包含：当前日期、工作目录、平台、git 分支（若有）、已注册工具列表及一行描述。例如：
+    Current date: 2026-05-09
+    Working directory: /home/user/my_project
+    Platform: aarch64-linux
+    Git branch: main
+    
+    Available tools:
+      - edit_file: Search-and-replace edit in a file (exact match required)
+      - exec_shell: Run a shell command in the workspace
+      - load_skill: Load instructions for a named skill
+      - read_file: Read file contents with optional line range
+      - write_file: Create or overwrite a file
+▏ 
+- 上下文文件发现
+▏ 自动从工作目录向上遍历到根目录，发现 AGENTS.md / CLAUDE.md 并注入提示词。可通过 agent.context_files: false 在配置中关闭。
+▏ 
+- Skills 激活
+▏ - 现有 skill DSL 定义的技能现在出现在系统提示词中的 "Available skills" 目录
+▏ - 新增 load_skill 工具，模型可主动调用加载技能指令
+▏ - 新增 /skills 和 /skill:name REPL 命令，用户可手动激活技能
+▏ 
+- skill 文件格式
+▏ 支持 ~/.code_agent/skills/<name>/SKILL.md 和 .code_agent/skills/<name>/SKILL.md

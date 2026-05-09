@@ -341,6 +341,10 @@ module CodeAgent
         yield type: :tool_result, name: "tool", result: result_str[0..1000]
       end
 
+      chat.after_message do |message|
+        puts "--------------------------------------------------------------------------------"
+      end
+
       # Stream the actual response
       full_response = ""
       chat.ask(message) do |chunk|

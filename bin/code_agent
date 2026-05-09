@@ -1,0 +1,39 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+require "code_agent"
+require "thor"
+
+module CodeAgent
+  # CLI entry point via Thor.
+  class CLI < Thor
+    package_name "code_agent"
+
+    desc "chat", "Start an interactive coding session"
+    method_option :config, type: :string, desc: "Path to config file"
+    method_option :model,  type: :string, desc: "Model name override"
+    method_option :provider, type: :string, desc: "Provider override"
+    def chat
+      CodeAgent.configure!(options[:config])
+
+      # Override model/provider from CLI flags
+      if options[:model]
+        CodeAgent.config.data["model"] ||= {}
+        CodeAgent.config.data["model"]["name"] = options[:model]
+      end
+      if options[:provider]
+        CodeAgent.config.data["model"] ||= {}
+        CodeAgent.config.data["model"]["provider"] = options[:provider]
+      end
+
+      repl = CodeAgent::REPL.new(CodeAgent.config)
+      repl.start
+    end
+
+    default_command :chat
+  end
+end
+
+CodeAgent::CLI.start(ARGV)

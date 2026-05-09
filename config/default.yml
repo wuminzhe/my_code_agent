@@ -1,0 +1,34 @@
+# frozen_string_literal: true
+
+# Default configuration for CodeAgent.
+# Override in ~/.code_agent/config.yml or via --config flag.
+
+model:
+  provider: deepseek        # deepseek | openai | anthropic | google
+  name: deepseek-v4-flash   # model identifier
+  # api_key: sk-...         # optional; prefers env var (DEEPSEEK_API_KEY, etc.)
+
+agent:
+  max_turns: 50             # max tool-call rounds per user message
+  workspace: .              # default workspace root (relative or absolute)
+  context_files: true       # auto-discover AGENTS.md/CLAUDE.md in workspace
+
+session:
+  auto_save: false          # auto-save on exit
+
+tools:
+  read_file:
+    enabled: true
+    max_lines: 500          # truncate reads beyond this
+  write_file:
+    enabled: true
+  edit_file:
+    enabled: true
+  exec_shell:
+    enabled: true
+    timeout_sec: 120        # max shell command runtime
+    allow_commands: []      # empty = all allowed; populate to whitelist
+  load_skill:
+    enabled: true
+
+system_prompt: null         # null = use built-in default; string = override

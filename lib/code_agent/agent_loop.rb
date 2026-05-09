@@ -14,7 +14,7 @@ module CodeAgent
   # Core agent loop — wraps RubyLLM::Chat with tool registration,
   # streaming output, and turn management.
   class AgentLoop
-    attr_reader :chat, :turn_count, :extensions
+    attr_reader :chat, :turn_count, :extensions, :skills
 
     class << self
       # Current active agent loop (for tools to find skills)
@@ -28,14 +28,39 @@ module CodeAgent
       @tools = {}
       @turn_count = 0
       @extensions = []      # loaded Extension instances
+      @skills = {}          # name => { prompt:, description: }
     end
 
-    # Load extensions from user and project directories,
-    # plus file-based skills from SKILL.md files.
+    # Load extensions from user and project directories (Ruby files only).
     def load_extensions!
       @extensions = Extension.load_all(@config.workspace)
-      @extensions.concat(SkillLoader.load_all(@config.workspace))
       @extensions.each { |ext| ext.run_load_hooks(self) }
+      self
+    end
+
+    # Load skills from multiple sources:
+    # 1. Extension-defined skills (skill DSL in Ruby extensions)
+    # 2. File-based skills (SKILL.md in .code_agent/skills/)
+    def load_skills!
+      # Extension skills
+      @extensions.each do |ext|
+        next unless ext.respond_to?(:get_skill)
+        ext.instance_variable_get(:@skills).each do |name, skill_def|
+          @skills[name] ||= {
+            prompt: skill_def[:prompt],
+            description: ext.description || "Skill from extension"
+          }
+        end
+      end
+
+      # File-based skills (SKILL.md)
+      SkillLoader.load_all(@config.workspace).each do |skill|
+        @skills[skill.name] ||= {
+          prompt: skill.prompt,
+          description: skill.description
+        }
+      end
+
       self
     end
 
@@ -114,37 +139,23 @@ module CodeAgent
       parts.compact.join("\n\n")
     end
 
-    # Collect all skills from all loaded extensions.
-    # Returns a hash keyed by skill name.
+    # Collect all loaded skills. Returns a hash keyed by skill name.
     def collect_skills
-      skills = {}
-      @extensions.each do |ext|
-        next unless ext.respond_to?(:get_skill)
-        ext.instance_variable_get(:@skills).each do |name, skill_def|
-          skills[name] = skill_def unless skills.key?(name)
-        end
-      end
-      skills
+      @skills
     end
 
-    # Find a skill by name across all extensions
+    # Find a skill by name
     def find_skill(name)
-      @extensions.each do |ext|
-        next unless ext.respond_to?(:get_skill)
-        skill = ext.get_skill(name)
-        return skill if skill
-      end
-      nil
+      @skills[name]
     end
 
     # Format skills as a catalog for the system prompt.
     def format_skill_catalog
-      all_skills = collect_skills
-      return "" if all_skills.empty?
+      return "" if @skills.empty?
 
       lines = []
       lines << "Available skills (use the load_skill tool to activate):"
-      all_skills.each do |name, defn|
+      @skills.each do |name, defn|
         desc = defn[:prompt] ? defn[:prompt].to_s.lines.first.to_s.strip[0..100] : "(no description)"
         lines << "  - #{name}: #{desc}"
       end

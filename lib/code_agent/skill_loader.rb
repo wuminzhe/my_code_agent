@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "yaml"
-require_relative "extension"
 
 module CodeAgent
   # Loads skills from SKILL.md files in standard directories.
@@ -17,42 +16,43 @@ module CodeAgent
   #   ---
   #   Skill instructions here...
   #
-  # If name is omitted, the parent directory name is used.
+  # Returns an array of skill hashes: { name:, description:, prompt: }
   module SkillLoader
     SKILL_FILE = "SKILL.md"
     USER_SKILLS_DIR   = File.expand_path("~/.code_agent/skills")
     PROJECT_SKILLS_DIR = ".code_agent/skills"
 
-    class << self
-      # Load all file-based skills and return them as Extension objects.
-      # Each skill becomes a synthetic extension named "skill/<name>"
-      # so it integrates with the existing Extension + skill DSL.
-      def load_all(project_root = nil)
-        extensions = []
+    # Skill data returned by load_all
+    Skill = Struct.new(:name, :description, :prompt, keyword_init: true)
 
-        load_from_directory(USER_SKILLS_DIR, extensions)
+    class << self
+      # Load all file-based skills and return them as an array of Skill structs.
+      def load_all(project_root = nil)
+        skills = []
+
+        load_from_directory(USER_SKILLS_DIR, skills)
         if project_root
-          load_from_directory(File.join(project_root, PROJECT_SKILLS_DIR), extensions)
+          load_from_directory(File.join(project_root, PROJECT_SKILLS_DIR), skills)
         end
 
-        extensions
+        skills
       end
 
       private
 
-      def load_from_directory(dir, extensions)
+      def load_from_directory(dir, skills)
         return unless Dir.exist?(dir)
 
-        # Scan for SKILL.md files. Each skill is in its own subdirectory.
-        Dir.glob(File.join(dir, "**", SKILL_FILE)).sort.each do |file|
-          ext = build_skill_extension(file)
-          extensions << ext if ext
+        # Each skill is in its own subdirectory containing SKILL.md
+        Dir.glob(File.join(dir, "*", SKILL_FILE)).sort.each do |file|
+          skill = build_skill(file)
+          skills << skill if skill
         rescue StandardError => e
           warn "[CodeAgent] Failed to load skill #{file}: #{e.message}"
         end
       end
 
-      def build_skill_extension(file)
+      def build_skill(file)
         content = File.read(file)
         frontmatter, body = parse_frontmatter(content)
 
@@ -65,11 +65,7 @@ module CodeAgent
           return nil
         end
 
-        # Create a synthetic extension that registers this skill
-        Extension.define("skill/#{name}") do
-          description description
-          skill name, prompt: body.strip
-        end
+        Skill.new(name: name, description: description, prompt: body.strip)
       end
 
       def parse_frontmatter(content)

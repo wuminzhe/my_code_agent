@@ -32,6 +32,7 @@ module CodeAgent
       @prompt = TTY::Prompt.new(interrupt: -> { handle_interrupt })
       @agent = AgentLoop.new(config)
       @agent.load_extensions!
+      @agent.load_skills!
       @sessions = SessionManager.new
       @session_auto_save = config.data.dig("session", "auto_save") || false
       @ctrl_c_at = nil   # timestamp of last Ctrl+C for double-tap detection
@@ -172,10 +173,10 @@ module CodeAgent
         skills = @agent.collect_skills
         if skills.empty?
           puts "  No skills available."
-          puts "  Define skills in extensions using the `skill` DSL."
+          puts "  Define skills in extensions or add SKILL.md files to .code_agent/skills/"
         else
           skills.each do |name, defn|
-            desc = defn[:prompt].to_s.lines.first.to_s.strip[0..80]
+            desc = defn[:description] || defn[:prompt].to_s.lines.first.to_s.strip[0..80]
             puts "  #{@pastel.bright_white(name)} — #{desc}"
           end
         end

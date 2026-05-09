@@ -132,6 +132,7 @@ RSpec.describe CodeAgent::AgentLoop do
         skill "ruby_style", prompt: "Use Ruby style guide conventions."
       end
       agent.instance_variable_get(:@extensions) << ext
+      agent.load_skills!
       prompt = agent.assemble_system_prompt
       expect(prompt).to include("Available skills")
       expect(prompt).to include("ruby_style")
@@ -143,34 +144,49 @@ RSpec.describe CodeAgent::AgentLoop do
     end
   end
 
-  describe "#collect_skills" do
-    it "returns empty hash when no extensions loaded" do
-      expect(agent.collect_skills).to eq({})
-    end
-
-    it "returns skills from loaded extensions" do
-      ext = CodeAgent::Extension.define("collect_test") do
-        skill "test_a", prompt: "skill A"
-        skill "test_b", prompt: "skill B"
+  describe "#load_skills!" do
+    it "loads skills from extension DSL" do
+      ext = CodeAgent::Extension.define("ext_skills") do
+        description "Extension with skills"
+        skill "ext_a", prompt: "skill A"
+        skill "ext_b", prompt: "skill B"
       end
       agent.instance_variable_get(:@extensions) << ext
+      agent.load_skills!
       skills = agent.collect_skills
-      expect(skills.keys).to contain_exactly("test_a", "test_b")
+      # Extension skills should be present (file-based skills from
+      # .code_agent/skills/ may also be present depending on env)
+      expect(skills).to have_key("ext_a")
+      expect(skills).to have_key("ext_b")
+      expect(skills["ext_a"][:prompt]).to eq("skill A")
+    end
+
+    it "extension skills take priority over file-based skills" do
+      ext = CodeAgent::Extension.define("priority_ext") do
+        description "Priority test"
+        skill "ruby-testing", prompt: "overridden by extension"
+      end
+      agent.instance_variable_get(:@extensions) << ext
+      agent.load_skills!
+      skills = agent.collect_skills
+      expect(skills["ruby-testing"][:prompt]).to eq("overridden by extension")
     end
   end
 
   describe "#find_skill" do
-    it "finds a skill by name" do
+    it "returns skill data for loaded skill" do
       ext = CodeAgent::Extension.define("find_test") do
         skill "my_skill", prompt: "instructions"
       end
       agent.instance_variable_get(:@extensions) << ext
+      agent.load_skills!
       skill = agent.find_skill("my_skill")
       expect(skill).not_to be_nil
       expect(skill[:prompt]).to eq("instructions")
     end
 
     it "returns nil for unknown skill" do
+      agent.load_skills!
       expect(agent.find_skill("nonexistent")).to be_nil
     end
   end

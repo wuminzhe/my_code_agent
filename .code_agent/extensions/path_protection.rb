@@ -3,7 +3,7 @@
 # Path Protection — prevents writes to sensitive files and directories.
 #
 # Two independent layers:
-# 1. write_file / edit_file — blocked by on_tool_call (returns error
+# 1. write_file / edit_file — blocked by before_tool_call (returns error
 #    before the tool executes).  The LLM never sees the file touched.
 # 2. exec_shell — the command is wrapped with a chmod-based preamble
 #    that removes write permission from protected paths before the
@@ -30,7 +30,7 @@ CodeAgent::Extension.define "path_protection" do
 
   write_tools = %w[write_file edit_file].freeze
 
-  on_tool_call do |tool_name, params|
+  before_tool_call do |tool_name, params|
     if write_tools.include?(tool_name)
       path = params[:path].to_s
       next if path.empty?

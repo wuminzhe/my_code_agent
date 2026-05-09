@@ -39,7 +39,7 @@ bundle exec ruby -I lib bin/code_agent chat --provider=openai --model=gpt-4o
 | `/model` | Show current model/provider |
 | `/tools` | List registered tools |
 | `/extensions` | List loaded extensions |
-| `/hooks` | List active tool hooks (on_tool_call / on_tool_result) |
+| `/hooks` | List active tool hooks (before_tool_call / after_tool_call) |
 | `/save <name>` | Save current session |
 | `/load <name>` | Load a saved session |
 | `/sessions` | List all saved sessions |
@@ -106,8 +106,8 @@ end
 
 ### Tool Hooks
 
-Extensions can intercept tool calls via `on_tool_call` (runs before execution)
-and `on_tool_result` (runs after execution, can modify the result).
+Extensions can intercept tool calls via `before_tool_call` (runs before execution)
+and `after_tool_call` (runs after execution, can modify the result).
 
 **Block dangerous shell commands:**
 
@@ -115,7 +115,7 @@ and `on_tool_result` (runs after execution, can modify the result).
 CodeAgent::Extension.define "permission_gate" do
   description "Blocks dangerous shell commands"
 
-  on_tool_call do |tool_name, params|
+  before_tool_call do |tool_name, params|
     if tool_name == "exec_shell" && params[:command]&.include?("rm -rf")
       { block: true, reason: "rm -rf is not allowed" }
     end
@@ -130,7 +130,7 @@ end
 CodeAgent::Extension.define "path_protection" do
   description "Blocks writes to .env, node_modules/, .git/"
 
-  on_tool_call do |tool_name, params|
+  before_tool_call do |tool_name, params|
     next unless %w[write_file edit_file].include?(tool_name)
 
     path = params[:path].to_s
@@ -145,16 +145,16 @@ end
 
 ```ruby
 CodeAgent::Extension.define "result_annotator" do
-  on_tool_result do |tool_name, params, result|
+  after_tool_call do |tool_name, params, result|
     result.merge(annotated_by: "result_annotator")
   end
 end
 ```
 
 Hook behavior:
-- `on_tool_call` blocks run in extension load order — the first hook to return
+- `before_tool_call` blocks run in extension load order — the first hook to return
   `{ block: true, reason: "..." }` wins, and the tool is not executed
-- `on_tool_result` hooks chain: each receives the (possibly modified) result
+- `after_tool_call` hooks chain: each receives the (possibly modified) result
   from the previous hook
 - When a tool is blocked, the LLM receives an error message like
   `Blocked by extension: rm -rf is not allowed` and can explain to the user

@@ -9,9 +9,9 @@ RSpec.describe "Extension Hooks" do
   # ── Hook Registry ───────────────────────────────────────────────────
 
   describe "Extension hook registry" do
-    it "registers and runs on_tool_call hooks" do
+    it "registers and runs before_tool_call hooks" do
       ext = CodeAgent::Extension.define("test_hooks") do
-        on_tool_call do |tool_name, params|
+        before_tool_call do |tool_name, params|
           if tool_name == "exec_shell" && params[:command]&.include?("rm")
             { block: true, reason: "no rm allowed" }
           end
@@ -30,9 +30,9 @@ RSpec.describe "Extension Hooks" do
       expect(result).to be_nil
     end
 
-    it "registers and runs on_tool_result hooks" do
+    it "registers and runs after_tool_call hooks" do
       ext = CodeAgent::Extension.define("result_mod") do
-        on_tool_result do |_tool_name, _params, result|
+        after_tool_call do |_tool_name, _params, result|
           result.merge(annotated: true)
         end
       end
@@ -48,13 +48,13 @@ RSpec.describe "Extension Hooks" do
       order = []
 
       ext1 = CodeAgent::Extension.define("first") do
-        on_tool_call { |n, _| order << "call:#{n}" }
-        on_tool_result { |n, _, r| order << "result:#{n}"; r }
+        before_tool_call { |n, _| order << "call:#{n}" }
+        after_tool_call { |n, _, r| order << "result:#{n}"; r }
       end
 
       ext2 = CodeAgent::Extension.define("second") do
-        on_tool_call { |n, _| order << "call2:#{n}" }
-        on_tool_result { |n, _, r| order << "result2:#{n}"; r }
+        before_tool_call { |n, _| order << "call2:#{n}" }
+        after_tool_call { |n, _, r| order << "result2:#{n}"; r }
       end
 
       CodeAgent::Extension.register_hooks(ext1)
@@ -68,11 +68,11 @@ RSpec.describe "Extension Hooks" do
 
     it "first blocking hook wins" do
       CodeAgent::Extension.define("block_first") do
-        on_tool_call { |_, _| { block: true, reason: "blocked by first" } }
+        before_tool_call { |_, _| { block: true, reason: "blocked by first" } }
       end
 
       CodeAgent::Extension.define("never_called") do
-        on_tool_call { |_, _| { block: true, reason: "should not reach" } }
+        before_tool_call { |_, _| { block: true, reason: "should not reach" } }
       end
 
       CodeAgent::Extension.registry.each_value { |e| CodeAgent::Extension.register_hooks(e) }
@@ -83,7 +83,7 @@ RSpec.describe "Extension Hooks" do
 
     it "clear_hooks! removes all hooks" do
       ext = CodeAgent::Extension.define("temp_hook") do
-        on_tool_call { |_, _| { block: true, reason: "test" } }
+        before_tool_call { |_, _| { block: true, reason: "test" } }
       end
 
       CodeAgent::Extension.register_hooks(ext)
@@ -95,9 +95,9 @@ RSpec.describe "Extension Hooks" do
 
     it "hook_summary reports counts correctly" do
       ext = CodeAgent::Extension.define("multi_hooks") do
-        on_tool_call { |_, _| nil }
-        on_tool_call { |_, _| nil }
-        on_tool_result { |_, _, r| r }
+        before_tool_call { |_, _| nil }
+        before_tool_call { |_, _| nil }
+        after_tool_call { |_, _, r| r }
       end
 
       CodeAgent::Extension.register_hooks(ext)
@@ -122,11 +122,11 @@ RSpec.describe "Extension Hooks" do
       end
     end
 
-    it "blocks tool execution when on_tool_call returns block: true" do
+    it "blocks tool execution when before_tool_call returns block: true" do
       tool = fake_tool_class.new
       tname = tool.name
       ext = CodeAgent::Extension.define("blocker") do
-        on_tool_call do |name, _params|
+        before_tool_call do |name, _params|
           if name == tname
             { block: true, reason: "testing block" }
           end
@@ -140,7 +140,7 @@ RSpec.describe "Extension Hooks" do
 
     it "allows execution when hooks return nil" do
       ext = CodeAgent::Extension.define("passive") do
-        on_tool_call { |_, _| nil }
+        before_tool_call { |_, _| nil }
       end
       CodeAgent::Extension.register_hooks(ext)
 
@@ -149,11 +149,11 @@ RSpec.describe "Extension Hooks" do
       expect(result).to eq({ action: "hello", executed: true })
     end
 
-    it "modifies result via on_tool_result hook" do
+    it "modifies result via after_tool_call hook" do
       tool = fake_tool_class.new
       tname = tool.name
       ext = CodeAgent::Extension.define("annotator") do
-        on_tool_result do |name, _params, result|
+        after_tool_call do |name, _params, result|
           if name == tname
             result.merge(annotated_by: "annotator")
           else
@@ -169,10 +169,10 @@ RSpec.describe "Extension Hooks" do
 
     it "chains result modifications from multiple hooks" do
       ext1 = CodeAgent::Extension.define("first_mod") do
-        on_tool_result { |_, _, r| r.merge(step1: true) }
+        after_tool_call { |_, _, r| r.merge(step1: true) }
       end
       ext2 = CodeAgent::Extension.define("second_mod") do
-        on_tool_result { |_, _, r| r.merge(step2: true) }
+        after_tool_call { |_, _, r| r.merge(step2: true) }
       end
       CodeAgent::Extension.register_hooks(ext1)
       CodeAgent::Extension.register_hooks(ext2)
@@ -185,7 +185,7 @@ RSpec.describe "Extension Hooks" do
 
     it "does not affect tools without matching hooks" do
       ext = CodeAgent::Extension.define("shell_only") do
-        on_tool_call do |tool_name, _params|
+        before_tool_call do |tool_name, _params|
           if tool_name == "exec_shell"
             { block: true, reason: "no shell" }
           end
@@ -213,9 +213,9 @@ RSpec.describe "Extension Hooks" do
 
     it "counts hooks correctly" do
       ext = CodeAgent::Extension.define("with_hooks") do
-        on_tool_call { |_, _| nil }
-        on_tool_call { |_, _| nil }
-        on_tool_result { |_, _, r| r }
+        before_tool_call { |_, _| nil }
+        before_tool_call { |_, _| nil }
+        after_tool_call { |_, _, r| r }
       end
       counts = ext.hook_counts
       expect(counts[:tool_call]).to eq(2)
@@ -229,7 +229,7 @@ RSpec.describe "Extension Hooks" do
     it "blocks rm -rf" do
       patterns = [/\brm\s+-rf?\b/]
       ext = CodeAgent::Extension.define("gate") do
-        on_tool_call do |tool_name, params|
+        before_tool_call do |tool_name, params|
           next nil unless tool_name == "exec_shell"
 
           command = params[:command].to_s
@@ -247,7 +247,7 @@ RSpec.describe "Extension Hooks" do
     it "allows safe commands" do
       patterns = [/\brm\s+-rf?\b/]
       ext = CodeAgent::Extension.define("safe_gate") do
-        on_tool_call do |tool_name, params|
+        before_tool_call do |tool_name, params|
           next nil unless tool_name == "exec_shell"
 
           command = params[:command].to_s
@@ -268,7 +268,7 @@ RSpec.describe "Extension Hooks" do
   describe "path protection pattern" do
     it "blocks writes to .env" do
       ext = CodeAgent::Extension.define("protector") do
-        on_tool_call do |tool_name, params|
+        before_tool_call do |tool_name, params|
           next nil unless %w[write_file edit_file].include?(tool_name)
 
           path = params[:path].to_s
@@ -285,7 +285,7 @@ RSpec.describe "Extension Hooks" do
 
     it "allows writes to normal files" do
       ext = CodeAgent::Extension.define("allow_normal") do
-        on_tool_call do |tool_name, params|
+        before_tool_call do |tool_name, params|
           next nil unless %w[write_file edit_file].include?(tool_name)
 
           path = params[:path].to_s
@@ -306,7 +306,7 @@ RSpec.describe "Extension Hooks" do
   describe "built-in tool via #call", :tmpdir do
     it "blocks exec_shell via hook" do
       ext = CodeAgent::Extension.define("no_exec") do
-        on_tool_call do |tool_name, _params|
+        before_tool_call do |tool_name, _params|
           if tool_name == "exec_shell"
             { block: true, reason: "shell disabled" }
           end
@@ -321,7 +321,7 @@ RSpec.describe "Extension Hooks" do
 
     it "allows read_file despite hook for shell only" do
       ext = CodeAgent::Extension.define("shell_only_hook") do
-        on_tool_call do |tool_name, _params|
+        before_tool_call do |tool_name, _params|
           if tool_name == "exec_shell"
             { block: true, reason: "no shell" }
           end

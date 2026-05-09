@@ -82,7 +82,7 @@ module CodeAgent
     # Always tracks the tool in @tools for prompt construction.
     # Only registers with the RubyLLM chat if chat is already initialized.
     #
-    # Tool hooks (on_tool_call / on_tool_result) are handled by
+    # Tool hooks (before_tool_call / after_tool_call) are handled by
     # Tools::Base#call — no per-instance wrapping needed.
     def register_tool(tool)
       @tools[tool.name] = tool

@@ -12,7 +12,7 @@ module CodeAgent
   #   - Add system prompt fragments
   #   - Hook into agent lifecycle events
   #   - Define skills (pre-packaged prompts + tools)
-  #   - Intercept tool calls (on_tool_call) and results (on_tool_result)
+  #   - Intercept tool calls (before_tool_call) and results (after_tool_call)
   #     for permission gates, path protection, result modification, etc.
   #
   # Usage in an extension file:
@@ -31,7 +31,7 @@ module CodeAgent
   #     end
   #
   #     # Intercept tool execution — return { block: true, reason: "..." } to deny
-  #     on_tool_call do |tool_name, params|
+  #     before_tool_call do |tool_name, params|
   #       if tool_name == "exec_shell" && params[:command]&.include?("rm -rf")
   #         { block: true, reason: "Dangerous command blocked" }
   #       end
@@ -113,7 +113,7 @@ module CodeAgent
         @tool_result_hooks = []
       end
 
-      # Run all on_tool_call hooks before a tool executes.
+      # Run all before_tool_call hooks before a tool executes.
       # Returns nil if all hooks pass, or { block: true, reason: "..." }
       # if any hook blocks.
       def run_tool_call_hooks(tool_name, params)
@@ -130,7 +130,7 @@ module CodeAgent
         nil
       end
 
-      # Run all on_tool_result hooks after a tool executes.
+      # Run all after_tool_call hooks after a tool executes.
       # Returns the (potentially modified) result hash.
       def run_tool_result_hooks(tool_name, params, result)
         modified = result
@@ -177,12 +177,12 @@ module CodeAgent
     # keyword arguments.  Return nil / nothing to allow execution.
     # Return { block: true, reason: "..." } to deny the tool call.
     #
-    #   on_tool_call do |tool_name, params|
+    #   before_tool_call do |tool_name, params|
     #     if tool_name == "exec_shell" && params[:command]&.include?("rm -rf")
     #       { block: true, reason: "Dangerous: rm -rf is not allowed" }
     #     end
     #   end
-    def on_tool_call(&block)
+    def before_tool_call(&block)
       @tool_call_hooks << block
     end
 
@@ -190,10 +190,10 @@ module CodeAgent
     # The block receives (tool_name, params, result) and can return a
     # modified result hash.  Return nil to keep the original result.
     #
-    #   on_tool_result do |tool_name, params, result|
+    #   after_tool_call do |tool_name, params, result|
     #     result.merge(annotated_by: @name)
     #   end
-    def on_tool_result(&block)
+    def after_tool_call(&block)
       @tool_result_hooks << block
     end
 

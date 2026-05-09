@@ -9,7 +9,7 @@ module CodeAgent
     # Our tools use keyword arguments; RubyLLM infers the JSON Schema from them.
     #
     # Hook integration: we override RubyLLM::Tool#call (the entry point for
-    # tool execution) so extension on_tool_call / on_tool_result hooks fire
+    # tool execution) so extension before_tool_call / after_tool_call hooks fire
     # around every tool call, while the original #execute signature is left
     # untouched for schema inference.
     class Base < RubyLLM::Tool
@@ -22,7 +22,7 @@ module CodeAgent
         # Normalize string keys → symbols (same as RubyLLM does before execute)
         params = args.is_a?(Hash) ? args.transform_keys(&:to_sym) : {}
 
-        # 1. Run on_tool_call hooks before execution.
+        # 1. Run before_tool_call hooks before execution.
         blocked = CodeAgent::Extension.run_tool_call_hooks(name, params)
         if blocked
           return { error: "Blocked by extension: #{blocked[:reason]}" }
@@ -31,7 +31,7 @@ module CodeAgent
         # 2. Execute the tool (RubyLLM validates, then calls #execute).
         result = super(args)
 
-        # 3. Run on_tool_result hooks — each can modify the result.
+        # 3. Run after_tool_call hooks — each can modify the result.
         CodeAgent::Extension.run_tool_result_hooks(name, params, result)
       end
 

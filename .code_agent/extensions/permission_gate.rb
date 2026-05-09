@@ -25,7 +25,7 @@ CodeAgent::Extension.define "permission_gate" do
     { pattern: /\bshutdown\b/,      reason: "shutdown requires explicit user approval" },
   ].freeze
 
-  on_tool_call do |tool_name, params|
+  before_tool_call do |tool_name, params|
     next unless tool_name == "exec_shell"
 
     command = params[:command].to_s

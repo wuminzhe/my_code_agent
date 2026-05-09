@@ -20,6 +20,7 @@ module CodeAgent
       "/model"      => "Show current model info",
       "/tools"      => "List registered tools",
       "/extensions" => "List loaded extensions",
+      "/hooks"      => "List active tool hooks (on_tool_call / on_tool_result)",
       "/skills"     => "List available skills",
       "/skill"      => "Load a skill (usage: /skill <name>)",
       "/compact"    => "Compact conversation context",
@@ -208,11 +209,33 @@ module CodeAgent
           @agent.extensions.each do |ext|
             tool_count = ext.instance_variable_get(:@tool_classes).size
             skill_count = ext.instance_variable_get(:@skills).size
+            hook_counts = ext.hook_counts
             info = []
             info << "#{tool_count} tools" if tool_count > 0
             info << "#{skill_count} skills" if skill_count > 0
+            info << "#{hook_counts[:tool_call]} on_tool_call, #{hook_counts[:tool_result]} on_tool_result" if hook_counts.values.sum > 0
             puts "  #{@pastel.bright_white(ext.name)} — #{ext.description}"
             puts "    #{info.join(', ')}" unless info.empty?
+          end
+        end
+      when "/hooks"
+        summary = CodeAgent::Extension.hook_summary
+        if summary[:total] == 0
+          puts "  No tool hooks active."
+          puts "  Use on_tool_call / on_tool_result in extension files to add hooks."
+        else
+          puts "  Active tool hooks:"
+          puts "    on_tool_call:  #{summary[:tool_call]}"
+          puts "    on_tool_result: #{summary[:tool_result]}"
+          puts
+          puts "  Hooks by extension:"
+          @agent.extensions.each do |ext|
+            hc = ext.hook_counts
+            next if hc.values.sum == 0
+            parts = []
+            parts << "#{hc[:tool_call]} on_tool_call" if hc[:tool_call] > 0
+            parts << "#{hc[:tool_result]} on_tool_result" if hc[:tool_result] > 0
+            puts "    #{@pastel.bright_white(ext.name)} — #{parts.join(', ')}"
           end
         end
       when "/help"

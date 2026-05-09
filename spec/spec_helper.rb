@@ -22,9 +22,11 @@ RSpec.configure do |config|
   config.warnings = false
   config.default_formatter = "doc" if config.files_to_run.one?
 
-  # Reset CodeAgent config between tests
+  # Reset CodeAgent config and extension state between tests
   config.before do
     CodeAgent.configure!
+    CodeAgent::Extension.instance_variable_set(:@registry, {})
+    CodeAgent::Extension.clear_hooks!
   end
 
   # Temp workspace for tool/file tests — avoids rspec-mocks in around hook

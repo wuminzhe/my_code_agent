@@ -34,7 +34,10 @@ module CodeAgent
     # Load extensions from user and project directories (Ruby files only).
     def load_extensions!
       @extensions = Extension.load_all(@config.workspace)
-      @extensions.each { |ext| ext.run_load_hooks(self) }
+      @extensions.each do |ext|
+        ext.run_load_hooks(self)
+        Extension.register_hooks(ext)
+      end
       self
     end
 
@@ -78,11 +81,16 @@ module CodeAgent
     # Register a tool instance (RubyLLM::Tool subclass).
     # Always tracks the tool in @tools for prompt construction.
     # Only registers with the RubyLLM chat if chat is already initialized.
+    #
+    # Tool hooks (on_tool_call / on_tool_result) are handled by
+    # Tools::Base#call — no per-instance wrapping needed.
     def register_tool(tool)
       @tools[tool.name] = tool
       chat.with_tool(tool) if @chat
       self
     end
+
+    public
 
     # Send a user message and stream the response
     # Yields chunks of the form: { type: :text, content: "..." } or
@@ -103,6 +111,7 @@ module CodeAgent
     def reset!
       chat.reset_messages!
       @turn_count = 0
+      Extension.clear_hooks!
     end
 
     # Get conversation history

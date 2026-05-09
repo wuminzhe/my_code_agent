@@ -10,7 +10,7 @@ A minimal, extensible terminal coding agent built with Ruby and [RubyLLM](https:
 | Agent Loop | `AgentLoop` — tool registration, system prompt assembly, streaming |
 | Coding Tools | 4 built-in tools: read, write, edit, shell |
 | Terminal UI | `TTY::Prompt` + `Pastel` — colored REPL, slash commands |
-| Extensions | `Extension` DSL — custom tools, system prompt fragments, skills |
+| Extensions | `Extension` DSL — custom tools, system prompt fragments, skills, tool hooks |
 | Sessions | `SessionManager` — JSON persistence, load/save, context compaction |
 
 ## Quick Start
@@ -39,6 +39,7 @@ bundle exec ruby -I lib bin/code_agent chat --provider=openai --model=gpt-4o
 | `/model` | Show current model/provider |
 | `/tools` | List registered tools |
 | `/extensions` | List loaded extensions |
+| `/hooks` | List active tool hooks (on_tool_call / on_tool_result) |
 | `/save <name>` | Save current session |
 | `/load <name>` | Load a saved session |
 | `/sessions` | List all saved sessions |
@@ -103,6 +104,65 @@ CodeAgent::Extension.define "my_tools" do
 end
 ```
 
+### Tool Hooks
+
+Extensions can intercept tool calls via `on_tool_call` (runs before execution)
+and `on_tool_result` (runs after execution, can modify the result).
+
+**Block dangerous shell commands:**
+
+```ruby
+CodeAgent::Extension.define "permission_gate" do
+  description "Blocks dangerous shell commands"
+
+  on_tool_call do |tool_name, params|
+    if tool_name == "exec_shell" && params[:command]&.include?("rm -rf")
+      { block: true, reason: "rm -rf is not allowed" }
+    end
+    # Return nil (or nothing) to allow execution
+  end
+end
+```
+
+**Protect sensitive files from writes:**
+
+```ruby
+CodeAgent::Extension.define "path_protection" do
+  description "Blocks writes to .env, node_modules/, .git/"
+
+  on_tool_call do |tool_name, params|
+    next unless %w[write_file edit_file].include?(tool_name)
+
+    path = params[:path].to_s
+    if File.fnmatch?("**/.env", path, File::FNM_PATHNAME)
+      { block: true, reason: ".env is protected" }
+    end
+  end
+end
+```
+
+**Modify tool results:**
+
+```ruby
+CodeAgent::Extension.define "result_annotator" do
+  on_tool_result do |tool_name, params, result|
+    result.merge(annotated_by: "result_annotator")
+  end
+end
+```
+
+Hook behavior:
+- `on_tool_call` blocks run in extension load order — the first hook to return
+  `{ block: true, reason: "..." }` wins, and the tool is not executed
+- `on_tool_result` hooks chain: each receives the (possibly modified) result
+  from the previous hook
+- When a tool is blocked, the LLM receives an error message like
+  `Blocked by extension: rm -rf is not allowed` and can explain to the user
+- Use `/hooks` to inspect active hooks
+
+Built-in examples: `.code_agent/extensions/permission_gate.rb` and
+`path_protection.rb`. Enable them by moving/renaming to remove the `.disabled` suffix.
+
 ## Sessions
 
 Sessions are saved to `~/.code_agent/sessions/<name>.json`. They preserve the full conversation history including tool calls and results.
@@ -159,7 +219,7 @@ my_code_agent/
     Working directory: /home/user/my_project
     Platform: aarch64-linux
     Git branch: main
-    
+  
     Available tools:
       - edit_file: Search-and-replace edit in a file (exact match required)
       - exec_shell: Run a shell command in the workspace
